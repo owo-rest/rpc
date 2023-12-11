@@ -138,7 +138,7 @@ export class App {
             id: request.id!,
           })
         }
-        const result = await handler(request.params, client)
+        const result = await handler(request.params ?? [ ], client)
         responses.push({ id: request.id!, result })
       } else {
         // It's an emitter
@@ -154,7 +154,7 @@ export class App {
         // Because emitters can return a value at any time, we are going to have to send messages on their schedule.
         // This may break batches, but I don't think that is a big deal
         handler(
-          request.params,
+          request.params ?? [ ],
           (data) => {
             send(sock, { result: data, id: request.id || null })
           },
