@@ -2,6 +2,28 @@ import { parseRequest, send } from './request.ts'
 import type { JsonRpcResponse, RPCOptions } from './types.ts'
 import { lazyJSONParse, paramsEncoder } from './utils.ts'
 
+const ERRORS: Record<number, string> = {
+  [ -32700 ]: "Parse error",
+  [ -32600 ]: "Invalid Request",
+  [ -32601 ]: "Method not found",
+  [ -32603 ]: "Internal error"
+}
+
+export class JsonRpcError extends Error {
+  /** 
+   * Defaults to -32000 as per the JSON-RPC specification
+   * "Reserved for implementation defined server-errors"
+   */
+  code = -32000;
+
+  constructor(code: number, message?: string) {
+    super(ERRORS[code] ?? message);
+
+    this.name = "JsonRpcError";
+    this.code = code;
+  }
+}
+
 export class App {
   httpConn?: Deno.HttpConn
   listener?: Deno.Listener
@@ -138,8 +160,22 @@ export class App {
             id: request.id!,
           })
         }
-        const result = await handler(request.params ?? [ ], client)
-        responses.push({ id: request.id!, result })
+
+        try {
+          const result = await handler(request.params ?? [ ], client)
+          responses.push({ id: request.id!, result })
+        } catch(e) {
+          if(e instanceof JsonRpcError) {
+            responses.push({
+              error: { code: e.code, message: e.message },
+              id: request.id!
+            });
+
+            return;
+          }
+
+          throw e;
+        }
       } else {
         // It's an emitter
         const handler = this.emitters.get(request.method)
